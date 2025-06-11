@@ -1,58 +1,51 @@
 using System.Collections;
 using UnityEngine;
 
-public class Soldier : Enemy
+public class Kamikaze : Enemy
 {
-    [Header("Component references")]
-    private Rigidbody2D rbEnemy;
-    private Transform playerTransform;
-
-    [Header("Patrol references")]
-    [SerializeField] private Transform pointA;
-    [SerializeField] private Transform pointB;
+    [Header("Patrol settings")]
+    private float patrolRadius = 5f;
     private float waitTime;
+
+    [Header("Detection settings")]
     [SerializeField] private float detectionRange;
 
+    private Rigidbody2D rbEnemy;
+    private Transform playerTransform;
+    private Vector2 patrolCenter;
     private Vector2 currentTarget;
-    private bool waiting = false;
-    private bool goingToB = true;
+    private bool waiting;
 
     private void Awake()
     {
         rbEnemy = GetComponent<Rigidbody2D>();
-        waitTime = 2f;
+        waitTime = 1.5f;
     }
 
     private void Start()
     {
         playerTransform = GameObject.FindWithTag("Player")?.transform;
-        maxHealth = 100;
+        patrolCenter = transform.position;
+        maxHealth = 50;
         currentHealth = maxHealth;
-        moveSpeed = 2f;
+        moveSpeed = 3.5f;
         enemyState = EnemyState.Patrol;
-        goingToB = true;
-        currentTarget = pointB.position;
+        PickNewPatrolTarget();
     }
 
     private void Update()
     {
-        if (playerTransform == null) return;
         CheckDistances();
         SwitchEnemyState();
     }
 
     private void CheckDistances()
     {
+        if (playerTransform == null) return;
         float distanceToPlayer = Vector2.Distance(transform.position, playerTransform.position);
         if (distanceToPlayer <= detectionRange && enemyState != EnemyState.Attack)
         {
             enemyState = EnemyState.Attack;
-        }
-        else if (distanceToPlayer > detectionRange && enemyState == EnemyState.Attack)
-        {
-            enemyState = EnemyState.Patrol;
-            currentTarget = GetNextTarget();
-            waiting = false;
         }
     }
 
@@ -61,52 +54,49 @@ public class Soldier : Enemy
         switch (enemyState)
         {
             case EnemyState.Idle:
+                rbEnemy.velocity = Vector2.zero;
                 break;
             case EnemyState.Patrol:
                 if (!waiting)
                     EnemyMovement();
                 break;
             case EnemyState.Attack:
-                Attack();
+                FollowPlayer();
                 break;
         }
     }
 
     protected override void EnemyMovement()
     {
-        Vector2 direction = (currentTarget - (Vector2)transform.position).normalized;
-        rbEnemy.velocity = direction * moveSpeed;
-
-        float distance = Vector2.Distance(transform.position, currentTarget);
-        if (distance < 0.5f)
+        Vector2 dir = (currentTarget - (Vector2)transform.position).normalized;
+        rbEnemy.velocity = dir * moveSpeed;
+        if (!waiting && Vector2.Distance(transform.position, currentTarget) < 0.2f)
         {
-            StartCoroutine(WaitAndSwitchTarget());
+            waiting = true;
+            StartCoroutine(WaitAndPickNewTarget());
         }
     }
 
-    private IEnumerator WaitAndSwitchTarget()
+    private IEnumerator WaitAndPickNewTarget()
     {
         waiting = true;
         rbEnemy.velocity = Vector2.zero;
         enemyState = EnemyState.Idle;
-
         yield return new WaitForSeconds(waitTime);
-
-        currentTarget = GetNextTarget();
+        PickNewPatrolTarget();
         enemyState = EnemyState.Patrol;
         waiting = false;
     }
-
-    private Vector2 GetNextTarget()
+    private void PickNewPatrolTarget()
     {
-        goingToB = !goingToB; 
-        return goingToB ? pointB.position : pointA.position;
+        float randomOffset = Random.Range(-patrolRadius, patrolRadius);
+        currentTarget = new Vector2(patrolCenter.x + randomOffset, transform.position.y);
     }
 
-    private void Attack()
+    private void FollowPlayer()
     {
-        rbEnemy.velocity = Vector2.zero;
-        Debug.Log("Soldier is attacking!");
+        Vector2 direction = (playerTransform.position - transform.position).normalized;
+        rbEnemy.velocity = direction * moveSpeed;
     }
 
     protected override void OnDeath()
@@ -127,11 +117,5 @@ public class Soldier : Enemy
     public override void GiveLife(int lifeAmount)
     {
         currentHealth = Mathf.Min(currentHealth + lifeAmount, maxHealth);
-    }
-
-    private void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, detectionRange);
     }
 }
