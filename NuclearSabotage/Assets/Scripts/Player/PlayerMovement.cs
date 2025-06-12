@@ -20,6 +20,9 @@ public class PlayerMovement
 
     public void Jump()
     {
-        rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+        if (Mathf.Abs(rb.velocity.y) < 0.01f)
+        {
+            rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+        }
     }
 }
